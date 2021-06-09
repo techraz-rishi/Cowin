@@ -1,0 +1,144 @@
+<html>
+
+<head>
+    <title>Cowin Scrape</title>
+    <style>
+        #tblResults,
+        #tblResults th,
+        #tblResults td {
+            border-collapse: collapse;
+            border: 1px solid black;
+        }
+
+        /* td.tdInput{
+            vertical-align: top;
+            min-width: 10%;
+        } */
+
+        #results {
+            margin-top: 1.5em;
+        }
+    </style>
+</head>
+
+<body>
+    <table>
+        <tr>
+            <td>District Id:</td>
+            <td class='tdInput'><input id="txtDistrictId" type='number' value="307"></td>
+            <td>Ernakulam=307</td>
+        </tr>
+
+        <tr>
+            <td>Date:</td>
+            <td><input id="txtDate" type='date' value='10-06-2021'></td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Min Age:</td>
+            <td>
+                <input type="radio" id="rbtn18" name="minAge" value="18" checked>
+                <label for="rbtn18">18+</label>
+                <input type="radio" id="rbtn40" name="minAge" value="40">
+                <label for="rbtn40">40+</label>
+                <input type="radio" id="rbtn45" name="minAge" value="45">
+                <label for="rbtn45">45+</label>
+            </td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Vaccine:</td>
+            <td>
+                <input type="radio" id="COVISHIELD" name="vaccine" value="COVISHIELD" checked>
+                <label for="COVISHIELD">COVISHIELD</label>
+                <input type="radio" id="COVAXIN" name="vaccine" value="COVAXIN">
+                <label for="COVAXIN">COVAXIN</label>
+            </td>
+            <td></td>
+        </tr>
+        <tr>
+            <td></td>
+            <td><button id="btnSearch" type="submit">Search</button></td>
+            <td><span id="spnAutoRefMsg"></span></td>
+        </tr>
+    </table>
+
+    <div id="results">
+
+    </div>
+</body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/handlebars.js/4.7.7/handlebars.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.21.1/axios.min.js"></script>
+<script>
+
+    window.onload = (event) => {
+        document.getElementById("txtDate").value = new Date().toISOString().substr(0,10);
+    };
+
+    let timeout = null;
+    document.getElementById("btnSearch").onclick = function () {
+        if (timeout) {
+            clearTimeout(timeout);
+        }
+        search()
+    };
+
+    const templStr = "<h2>Results</h2><h4>Last refreshed at {{timestamp}}</h4><table id='tblResults'><thead><tr><th>Center</th><th>Address</th><th>Date</th> <th>Available</th> <th>Min Age</th> <th>Vaccine</th> </tr></thead> <tbody>{{#each centers}}<tr> <td>{{center}}</td><td>{{address}}</td><td>{{date}}</td><td>{{available}}</td><td>{{minAge}}</td><td>{{vaccine}}</td></tr>{{/each}}</tbody> </table>"
+    const template = Handlebars.compile(templStr);
+
+
+    function search() {
+
+
+        let districtId = document.getElementById("txtDistrictId").value;
+        let date = new Date(document.getElementById("txtDate").value).toLocaleDateString();
+
+
+        axios.get('https://cdn-api.co-vin.in/api/v2/appointment/sessions/public/calendarByDistrict?district_id=' + districtId + '&date=' + date + '')
+            .then(function (response) {
+                console.log('Fetched data at ' + new Date());
+                if (response && response.data) {
+                    let centers = response.data.centers;
+                    let availableCenters = new Array();
+                    let minAge = document.querySelector('input[name="minAge"]:checked').value;
+                    let vaccine = document.querySelector('input[name="vaccine"]:checked').value;
+
+                    centers.forEach(c => {
+                        if (c.sessions && c.sessions.length > 0) {
+                            c.sessions.forEach(s => {
+                                if (s.min_age_limit == minAge && s.available_capacity_dose1 > 0 && s.vaccine == vaccine) {
+
+                                    availableCenters.push(
+                                        {
+                                            center: c.name,
+                                            address: c.address,
+                                            date: s.date,
+                                            available: s.available_capacity_dose1,
+                                            minAge: s.min_age_limit,
+                                            vaccine: s.vaccine
+                                        }
+                                    );
+                                }
+                            });
+                        }
+                    });
+
+
+
+                    if (availableCenters.length > 0) {
+                        document.getElementById("results").innerHTML = template({timestamp: new Date().toLocaleDateString(), centers: availableCenters });
+                    }
+                    else {
+                        document.getElementById("results").innerHTML = 'Not available. Last checked at ' + new Date()
+                    }
+
+                    timeout = setTimeout(search, 5000);
+                    document.getElementById("spnAutoRefMsg").innerHTML = "Auto refreshing every 5 secs..."
+                }
+            })
+    }
+
+
+</script>
+
+</html>
